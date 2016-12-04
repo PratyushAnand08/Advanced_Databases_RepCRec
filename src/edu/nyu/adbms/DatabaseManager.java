@@ -3,23 +3,16 @@
  */
 package edu.nyu.adbms;
 
-<<<<<<< HEAD
-=======
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
->>>>>>> repcrec
 /**
  * @author pratyush1
  *
  */
 public class DatabaseManager {
-<<<<<<< HEAD
-
-=======
 	
 	private boolean _siteStatus;
 	private int _siteIndex;
@@ -78,5 +71,4 @@ public class DatabaseManager {
 		// TODO Auto-generated method stub
 		
 	}
->>>>>>> repcrec
 }

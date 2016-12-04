@@ -4,12 +4,6 @@
 package edu.nyu.adbms;
 
 import java.io.BufferedReader;
-<<<<<<< HEAD
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-=======
 import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -22,7 +16,6 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
->>>>>>> repcrec
 
 /**
  * @author Pratyush Anand (pa1139)
@@ -30,12 +23,6 @@ import java.util.Set;
  *
  */
 public class TransactionManager {
-<<<<<<< HEAD
-	private Date timestamp;
-	private BufferedReader br;
-	private Map<Integer, Transaction> transactions = new HashMap<Integer, Transaction>();
-	private List<DatabaseManager> dm; 
-=======
 	
 	private Date _timestamp;
 	private Scanner _sc;
@@ -87,8 +74,8 @@ public class TransactionManager {
 	
 	public void start() {
 		try {
-			while(sc.hasNextLine()) {
-				String readLine = sc.nextLine();
+			while(_sc.hasNextLine()) {
+				String readLine = _sc.nextLine();
 				if (readLine == null || readLine.contains("exit"))
 					break;
 				if (readLine.startsWith("//"))
@@ -97,7 +84,7 @@ public class TransactionManager {
 					parseLine(readLine);
 				}
 			}
-			sc.close();
+			_sc.close();
 		}
 		catch (Exception e) {
 			System.err.println("TM -> start(): "+e.getMessage());
@@ -258,5 +245,4 @@ public class TransactionManager {
 	}
 	
 	
->>>>>>> repcrec
 }
