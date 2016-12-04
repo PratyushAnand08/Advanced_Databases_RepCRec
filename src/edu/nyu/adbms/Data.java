@@ -14,7 +14,7 @@ public class Data {
 
 	private int _value;
 	private int _index;
-	private boolean _accessible;
+	private boolean _accessibleForRead;
 	private Date _commitTime;
 	
 	private int unavailableTime;
@@ -27,10 +27,9 @@ public class Data {
 	 * @param unavailableTime
 	 */
 	public Data(int _value, int _index) {
-		super();
 		this._value = _value;
 		this._index = _index;
-		this._accessible = true;
+		this._accessibleForRead = true;
 		this._commitTime = new Date();
 		this.unavailableTime = -1;
 	}
@@ -67,14 +66,14 @@ public class Data {
 	 * @return the _accessible
 	 */
 	public boolean is_accessible() {
-		return _accessible;
+		return _accessibleForRead;
 	}
 
 	/**
 	 * @param _accessible the _accessible to set
 	 */
 	public void set_accessible(boolean _accessible) {
-		this._accessible = _accessible;
+		this._accessibleForRead = _accessible;
 	}
 
 	/**
