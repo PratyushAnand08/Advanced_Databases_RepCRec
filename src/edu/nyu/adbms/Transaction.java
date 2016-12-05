@@ -14,7 +14,7 @@ public class Transaction {
 
 	public static enum Type { RO, RW };
 	private int _transId;
-	private Date _timestamp;
+	private int _timestamp;
 	private Type _type;
 	
 	/**
@@ -22,7 +22,7 @@ public class Transaction {
 	 * @param _timestamp
 	 * @param _type
 	 */
-	public Transaction(int _transId, Date _timestamp, Type _type) {
+	public Transaction(int _transId, int _timestamp, Type _type) {
 		super();
 		this._transId = _transId;
 		this._timestamp = _timestamp;
@@ -46,14 +46,14 @@ public class Transaction {
 	/**
 	 * @return the _timestamp
 	 */
-	public Date get_timestamp() {
+	public int get_timestamp() {
 		return _timestamp;
 	}
 
 	/**
 	 * @param _timestamp the _timestamp to set
 	 */
-	public void set_timestamp(Date _timestamp) {
+	public void set_timestamp(int _timestamp) {
 		this._timestamp = _timestamp;
 	}
 

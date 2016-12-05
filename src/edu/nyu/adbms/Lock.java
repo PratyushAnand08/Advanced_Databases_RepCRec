@@ -10,7 +10,7 @@ package edu.nyu.adbms;
  */
 public class Lock {
 
-	private enum LockType { READ, WRITE };
+	public static enum LockType { READ, WRITE };
 	private int _transId;
 	private LockType _type;
 	
@@ -19,7 +19,6 @@ public class Lock {
 	 * @param type
 	 */
 	public Lock(int transId, LockType type) {
-		super();
 		_transId = transId;
 		_type = type;
 	}

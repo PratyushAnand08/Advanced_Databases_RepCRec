@@ -11,7 +11,7 @@ import java.util.Date;
 public class Operation {
 	
 	public static enum Type {
-	    READ, WRITE,
+	    READ, WRITE
 	  };
 
 	  private int _transactionId;

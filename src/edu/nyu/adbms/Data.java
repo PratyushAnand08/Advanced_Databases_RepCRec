@@ -15,6 +15,7 @@ public class Data {
 	private int _value;
 	private int _index;
 	private boolean _accessibleForRead;
+	private int _lastCommitValue;
 	private Date _commitTime;
 	
 	private int unavailableTime;
@@ -72,7 +73,7 @@ public class Data {
 	/**
 	 * @param _accessible the _accessible to set
 	 */
-	public void set_accessible(boolean _accessible) {
+	public void set_accessibleForRead(boolean _accessible) {
 		this._accessibleForRead = _accessible;
 	}
 
@@ -133,5 +134,19 @@ public class Data {
 		if (_value != other._value)
 			return false;
 		return true;
+	}
+
+	/**
+	 * @return the _lastCommitValue
+	 */
+	public int get_lastCommitValue() {
+		return _lastCommitValue;
+	}
+
+	/**
+	 * @param _lastCommitValue the _lastCommitValue to set
+	 */
+	public void set_lastCommitValue(int _lastCommitValue) {
+		this._lastCommitValue = _lastCommitValue;
 	}
 }
