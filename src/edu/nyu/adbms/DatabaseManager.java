@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import edu.nyu.adbms.Lock.LockType;
 import edu.nyu.adbms.Operation.Type;
@@ -26,14 +27,16 @@ public class DatabaseManager {
 	private List<Data> _variableList;
 	private Map<Integer, Queue<Operation>> _allowedTransactions;
 	private Map<Integer, List<Lock>> _lockTable;
+	private TransactionManager _tm;
 	
-	public DatabaseManager(int siteIndex) {
+	public DatabaseManager(int siteIndex, TransactionManager transactionManager) {
 		_siteStatus = true;
 		_siteIndex = siteIndex;
 		_lastFailTime = -1;
-		_variableList = new ArrayList<Data>();
+		_variableList = new CopyOnWriteArrayList<Data>();
 		_allowedTransactions = new HashMap<Integer, Queue<Operation>>();
 		_lockTable = new HashMap<Integer, List<Lock>>();
+		_tm = transactionManager;
 		init();
 	}
 	
@@ -160,23 +163,36 @@ public class DatabaseManager {
 	public boolean acquireLock(Operation op) {
 		// TODO Auto-generated method stub
 		List<Lock> locksOnVar = _lockTable.get(op.get_varIndex());
+		int setLock = 0;
 		if(op.get_type() == Type.READ) {
 			if(locksOnVar == null) {
 				List<Lock> newLockList = new ArrayList<Lock>();
-				newLockList.add(new Lock(op.get_transactionId(), LockType.READ));
+				if (op.get_writeValue() != 0)
+					newLockList.add(new Lock(op.get_transactionId(), LockType.WRITE));
+				else
+					newLockList.add(new Lock(op.get_transactionId(), LockType.READ));
 				_lockTable.put(op.get_varIndex(), newLockList);
 				addToAllowedTransactions(op);
 				return true;
 			}
 			else {
-				List<Lock> lockList = _lockTable.get(op.get_varIndex());
-				for(Lock templock : lockList) {
-					if (templock.getType() == Lock.LockType.WRITE)
-						return false;
+				for(Lock templock : locksOnVar) {
+					if (templock.getType() == LockType.WRITE) {
+						setLock = 0;
+						break;
+					}
+					else {
+						setLock = 1;
+						break;
+					}
 				}
-				lockList.add(new Lock(op.get_transactionId(), LockType.READ));
-				addToAllowedTransactions(op);
-				return true;
+				if(setLock == 1) {
+					locksOnVar.add(new Lock(op.get_transactionId(), LockType.READ));
+					_lockTable.put(op.get_varIndex(), locksOnVar);
+					addToAllowedTransactions(op);
+					return true;
+				}
+				return false;
 			}
 		}
 		else {
@@ -203,6 +219,68 @@ public class DatabaseManager {
 			Queue<Operation> operations = new LinkedList<Operation>();
 			operations.add(op);
 			_allowedTransactions.put(op.get_transactionId(), operations);
+		}
+	}
+
+	public boolean isVarAccessible(int get_varIndex) {
+		// TODO Auto-generated method stub
+		for(Data d : _variableList) {
+			if (d.get_index() == get_varIndex && d.is_accessible() != false){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public void commit(Operation op) {
+		// TODO Auto-generated method stub
+		System.out.println("From Site "+this._siteIndex);
+		if(op.get_type() == Type.READ){
+			for(Data data : _variableList) {
+				if(data.get_index() == op.get_varIndex()) {
+					System.out.println("variable x"+op.get_varIndex()+" from T"+
+							op.get_transactionId()+" has value "+data.get_value());
+					break;
+				}
+			}
+			List<Lock> lockList = _lockTable.get(op.get_varIndex());
+			lockList.remove(0);
+			if(!lockList.isEmpty()) {
+				_lockTable.put(op.get_varIndex(), lockList);
+			}
+			else {
+				_lockTable.remove(op.get_varIndex());
+			}
+			System.out.println("Releasing locks");
+			Queue<Operation> operation = _allowedTransactions.get(op.get_transactionId());
+			operation.poll();
+			if(!operation.isEmpty()) {
+				_allowedTransactions.put(op.get_transactionId(), operation);
+			}
+			else {
+				_allowedTransactions.remove(op.get_transactionId());
+			}
+		}
+		else {
+			//Data data = _variableList.get(op.get_varIndex()-1);
+			for(Data data : _variableList){
+				if(data.get_index() == op.get_varIndex()){
+					data.set_lastCommitValue(data.get_value());
+					data.set_value(op.get_writeValue());
+					System.out.println("New value for variable x"+op.get_varIndex()+
+							" is "+data.get_value()+" from T"+op.get_transactionId());
+				}
+			}
+			_lockTable.remove(op.get_varIndex());
+			System.out.println("Releasing locks");
+			Queue<Operation> operation = _allowedTransactions.get(op.get_transactionId());
+			operation.poll();
+			if(!operation.isEmpty()) {
+				_allowedTransactions.put(op.get_transactionId(), operation);
+			}
+			else {
+				_allowedTransactions.remove(op.get_transactionId());
+			}
 		}
 	}
 }

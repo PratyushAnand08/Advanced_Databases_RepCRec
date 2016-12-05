@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
+
+import edu.nyu.adbms.Operation.Type;
+
 import java.util.Map.Entry;
 
 /**
@@ -31,6 +34,8 @@ public class TransactionManager {
 	private Map<Integer, Transaction> _transactions = new HashMap<Integer, Transaction>();
     //map of site index and the list of variables stored in it
 	private Map<Integer, Queue<Operation>> _transOperationMap = new HashMap<Integer, Queue<Operation>>();
+	
+	private Map<Operation, List<Integer>> _operationLockAcquiredSitesMap = new HashMap<Operation, List<Integer>>();
 	private Map<Integer, List<Integer>> _variableMap;
 	//Set of aborted transactions
 	private Set<Integer> _abortedTransactions = new HashSet<Integer>();
@@ -54,7 +59,7 @@ public class TransactionManager {
 		_timestamp = 0;
 		_databaseManagers = new ArrayList<DatabaseManager>();
 		for (int i=1; i <= n; i++) {
-			DatabaseManager dm = new DatabaseManager(i);
+			DatabaseManager dm = new DatabaseManager(i, this);
 			_databaseManagers.add(dm);
 		}
 		
@@ -146,7 +151,9 @@ public class TransactionManager {
 				case "dump" : dump(args);//done
 							break;
 				case "querystate" : queryState();//to be done
-							break;	 
+							break;
+				default : System.out.println("Exiting from Database");	
+						  System.exit(1);
 			}
 		}
 	}
@@ -230,7 +237,36 @@ public class TransactionManager {
 
 	private void endTransaction(String args) {
 		// TODO Auto-generated method stub
-		
+		Integer transaction = Integer.parseInt(args.substring(1));
+		if(_abortedTransactions.contains(transaction))
+			return;
+		Queue<Operation> opQueue = _transOperationMap.get(transaction);
+		for(Operation op : opQueue) {
+			List<Integer> siteList = _operationLockAcquiredSitesMap.get(op);
+			for(Integer site : siteList) {
+				DatabaseManager dm = _databaseManagers.get(site-1);
+				dm.commit(op);
+			}
+			_operationLockAcquiredSitesMap.remove(op);
+		}
+		_transOperationMap.remove(transaction);
+		_transactions.remove(transaction);
+		System.out.println("Transaction T"+transaction+" committed successfully.");
+		checkToReleaseWaitingTransactions();
+	}
+
+	private void checkToReleaseWaitingTransactions() {
+		// TODO Auto-generated method stub
+		Operation tempOperation;
+		while(_waitingOperations.peek() != null) {
+			tempOperation = _waitingOperations.poll();
+			if(tempOperation.get_type() == Type.READ){
+				read(tempOperation);
+			}
+			else {
+				write(tempOperation);
+			}
+		}
 	}
 
 	private void parseReadWrite(String args) {
@@ -258,21 +294,26 @@ public class TransactionManager {
 		// TODO Auto-generated method stub
 		System.out.println("TM() -> Inside write()");
 		boolean result = false;
+		List<Integer> siteList = new ArrayList<Integer>();
 		if(_abortedTransactions.contains(op.get_transactionId()))
 			return;
 		List<Integer> sites = _variableMap.get(op.get_varIndex());
 		for(Integer site : sites) {
-			DatabaseManager dm = _databaseManagers.get(site);
+			DatabaseManager dm = _databaseManagers.get(site-1);
 			if(dm.getSiteStatus()) {
 				result = dm.acquireLock(op);
+				if(result == true) {
+					siteList.add(dm.getSiteIndex());
+				}
 			}
+			_operationLockAcquiredSitesMap.put(op, siteList);
 		}
-		if(!result) {
+		if(siteList.size() == 0) {
 			_waitingOperations.add(op);
 			System.out.println("TM, write() -> Didnt' get lock. In waiting.");
 		}
 		else {
-			System.out.println("TM, write() -> Got the lock. In waiting.");
+			System.out.println("TM, write() -> Got the lock.");
 			Queue<Operation> operationQueue = _transOperationMap.get(op.get_transactionId());
 			if(operationQueue != null) {
 				operationQueue.add(op);
@@ -281,7 +322,7 @@ public class TransactionManager {
 			else {
 				Queue<Operation> newOperationQueue = new LinkedList<Operation>();
 				newOperationQueue.add(op);
-				_transOperationMap.put(op.get_transactionId(), operationQueue);
+				_transOperationMap.put(op.get_transactionId(), newOperationQueue);
 			}
 		}
 	}
@@ -290,6 +331,7 @@ public class TransactionManager {
 		// TODO Auto-generated method stub
 		System.out.println("TM() -> Inside read()");
 		boolean result = false;
+		Transaction transaction;
 		if(_abortedTransactions.contains(op.get_transactionId()))
 			return;
 		if(_transactions.get(op.get_transactionId()).get_type() == Transaction.Type.RO) {
@@ -300,10 +342,14 @@ public class TransactionManager {
 			List<Integer> sites = _variableMap.get(op.get_varIndex());
 			for (Integer site : sites) {
 				DatabaseManager dm = _databaseManagers.get(site-1);
-				if(dm.getSiteStatus()) {
+				if(dm.getSiteStatus() && dm.isVarAccessible(op.get_varIndex())) {
 					result = dm.acquireLock(op);
-					if(result == true)
+					if(result == true){
+						List<Integer> siteList = new ArrayList<Integer>();
+						siteList.add(dm.getSiteIndex());
+						_operationLockAcquiredSitesMap.put(op, siteList);
 						break;
+					}
 				}
 			}
 		}
@@ -312,7 +358,7 @@ public class TransactionManager {
 			System.out.println("TM, read() -> Didnt' get lock. In waiting.");
 		}
 		else {
-			System.out.println("TM, read() -> Got the lock. In waiting.");
+			System.out.println("TM, read() -> Got the lock.");
 			Queue<Operation> operationQueue = _transOperationMap.get(op.get_transactionId());
 			if(operationQueue != null) {
 				operationQueue.add(op);
@@ -321,7 +367,7 @@ public class TransactionManager {
 			else {
 				Queue<Operation> newOperationQueue = new LinkedList<Operation>();
 				newOperationQueue.add(op);
-				_transOperationMap.put(op.get_transactionId(), operationQueue);
+				_transOperationMap.put(op.get_transactionId(), newOperationQueue);
 			}
 		}
 	}
@@ -340,6 +386,10 @@ public class TransactionManager {
 			_transactions.put(transId, new Transaction(transId, _timestamp, Transaction.Type.RO));
 		}
 	}
-	
+
+	public void CreateWaitingGraph(int get_transactionId, int transId) {
+		// TODO Auto-generated method stub
+		
+	}
 	
 }
