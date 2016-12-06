@@ -12,7 +12,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * @author pratyush1
+ * @author Pratyush Anand (pa1139)
+ * @author Arpit Saini (ads745)
  *
  */
 public class Graph<T> {
@@ -88,6 +89,7 @@ public class Graph<T> {
     public Collection<Vertex<T>> getAllVertex(){
         return allVertex.values();
     }
+    
     public void setDataForVertex(long id, T data){
         if(allVertex.containsKey(id)){
             Vertex<T> vertex = allVertex.get(id);

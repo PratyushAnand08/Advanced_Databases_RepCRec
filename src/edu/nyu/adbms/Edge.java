@@ -4,7 +4,8 @@
 package edu.nyu.adbms;
 
 /**
- * @author pratyush1
+ * @author Pratyush Anand (pa1139)
+ * @author Arpit Saini (ads745)
  *
  */
 public class Edge<T> {

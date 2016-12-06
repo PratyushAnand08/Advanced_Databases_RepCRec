@@ -5,7 +5,8 @@ package edu.nyu.adbms;
 
 import java.util.Date;
 /**
- * @author pratyush1
+ * @author Pratyush Anand (pa1139)
+ * @author Arpit Saini (ads745)
  *
  */
 public class Operation {

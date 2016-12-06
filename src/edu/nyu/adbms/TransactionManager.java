@@ -3,6 +3,9 @@
  */
 package edu.nyu.adbms;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -12,7 +15,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Scanner;
 import java.util.Set;
 
 import edu.nyu.adbms.Operation.Type;
@@ -27,39 +29,72 @@ import java.util.Map.Entry;
 public class TransactionManager {
 	
 	private int _timestamp;
-	private Scanner _sc;
+	private BufferedReader br;
 	
+	//List of all DatabaseManagers.
 	private List<DatabaseManager> _databaseManagers;
-	// map of transid and transaction
+	
+	//map of transId, transaction(transid)
 	private Map<Integer, Transaction> _transactions = new HashMap<Integer, Transaction>();
-    //map of site index and the list of variables stored in it
-	private Map<Integer, Queue<Operation>> _transOperationMap = new HashMap<Integer, Queue<Operation>>();
-	private Map<Integer, List<Integer>> _transLockTransMap = new HashMap<Integer, List<Integer>>();
-	private Map<Operation, List<Integer>> _operationLockAcquiredSitesMap = new HashMap<Operation, List<Integer>>();
+	
+    //map of varId, List of sites containing that varId
 	private Map<Integer, List<Integer>> _variableMap;
+	
+	//map of transId, Queue or operations associated with that transId
+	private Map<Integer, Queue<Operation>> _transOperationMap = new HashMap<Integer, Queue<Operation>>();
+	
+	//map of transId_, List of transIds
+	private Map<Integer, List<Integer>> _transLockTransMap = new HashMap<Integer, List<Integer>>();
+	
+	//
+	private Map<Operation, List<Integer>> _operationLockAcquiredSitesMap = new HashMap<Operation, List<Integer>>();
+	
+	private Map<Integer, List<List<Data>>> _transSiteDataList = new HashMap<Integer, List<List<Data>>>();
+	
 	//Set of aborted transactions
 	private Set<Integer> _abortedTransactions = new HashSet<Integer>();
 	//Queue of waiting operations
 	private Queue<Operation> _waitingOperations = new LinkedList<Operation>();
 	
+	/**
+	 * 
+	 * Contructor when no argument(filename) is passed
+	 * @param none
+	 * @return none
+	 * 
+	 */
 	public TransactionManager() {
-		_sc = new Scanner(System.in);
+		br = new BufferedReader(new InputStreamReader(System.in));
 	}
 	
+	/**
+	 * 
+	 * Contructor when argument(filename) is passed
+	 * @param inputFileName
+	 * @return none
+	 * 
+	 */
 	public TransactionManager(String inputFileName) {
 		try {
-			_sc = new Scanner(inputFileName);
+			br = new BufferedReader(new FileReader(inputFileName));
 		}
 		catch (Exception e) {
 			System.err.println(e.getMessage());
 		}
 	}
 	
+	/**
+	 * 
+	 * Initializes all the sites and variables associated with a particular site
+	 * @param number of sites
+	 * @return none
+	 * 
+	 */
 	public void init(int n) {
 		_timestamp = 0;
 		_databaseManagers = new ArrayList<DatabaseManager>();
 		for (int i=1; i <= n; i++) {
-			DatabaseManager dm = new DatabaseManager(i, this);
+			DatabaseManager dm = new DatabaseManager(i);
 			_databaseManagers.add(dm);
 		}
 		
@@ -75,21 +110,6 @@ public class TransactionManager {
 		    }
 		    _variableMap.put(i, siteList);
 		}
-		
-		/*Iterator<Entry<Integer, List<Integer>>> it = _variableMap.entrySet().iterator();
-		while(it.hasNext()) {
-			Map.Entry<Integer, List<Integer>> pair = (Map.Entry<Integer, List<Integer>>)it.next();
-			for(DatabaseManager dm : _databaseManagers){
-				
-				if(dm.getSiteIndex() == pair.getKey()) {
-					for (Integer variable: pair.getValue()) {
-						Data data = new Data(10 * variable, variable);
-						variableList.add(data);
-					}
-					dm.set_variableList(variableList);
-				}
-			}
-		}*/
 	}
 	
 	/**
@@ -98,21 +118,27 @@ public class TransactionManager {
 	public int get_timestamp() {
 		return _timestamp;
 	}
-
+	
+	/**
+	 * 
+	 * Starts the Transaction manager
+	 * @param none
+	 * @return none
+	 * 
+	 */
 	public void start() {
 		try {
-			while(_sc.hasNextLine()) {
-				String readLine = _sc.nextLine();
-				if (readLine == null || readLine.contains("exit"))
+			while(true){
+				String readLine = br.readLine();
+				if (readLine == null)
 					break;
-				if (readLine.startsWith("//"))
+				if (readLine.startsWith("//") || readLine.startsWith("/"))
 					continue;
-				if (!readLine.isEmpty()) {
-					parseLine(readLine);
-				}
+				if (!readLine.isEmpty())
+					parseLine(readLine);				
 				_timestamp++;
 			}
-			_sc.close();
+			br.close();
 		}
 		catch (Exception e) {
 			System.err.println("TM -> start(): "+e.getMessage());
@@ -120,8 +146,14 @@ public class TransactionManager {
 		}
 	}
 
+	/**
+	 * 
+	 * parse the line received in input, processes it and calls the respective method 
+	 * @param line
+	 * @return none
+	 * 
+	 */
 	private void parseLine(String line) {
-		// TODO Auto-generated method stub
 		int openingBracket = -1, closingBracket = -1;
 		String[] commands = line.replaceAll("\\s+", "").split(";");
 		for (String command : commands) {
@@ -142,29 +174,34 @@ public class TransactionManager {
 							break;
 				case "W" : parseReadWrite(args);
 							break;
-				case "end" : endTransaction(args);//to be done
+				case "end" : endTransaction(args);
 							break;
 				case "fail" : failSite(Integer.parseInt(args));
 							break;
 				case "recover" : recoverSite(Integer.parseInt(args));
 							break;
-				case "dump" : dump(args);//done
+				case "dump" : dump(args);
 							break;
-				case "querystate" : queryState();//to be done
+				case "querystate" :
 							break;
-				default : System.out.println("Exiting from Database");	
-						  System.exit(1);
+				case "exit" : System.out.println("Exiting from Database");	
+						  System.exit(0);
+						  break;
+				default : System.out.println("Please give the right command");
+						  break; 	
 			}
 		}
 	}
 
-	private void queryState() {
-		// TODO Auto-generated method stub
-		
-	}
-
+	
+	/**
+	 * 
+	 * Method to provide a dump of a variable or a site
+	 * @param sitesId or variableId
+	 * @return none
+	 * 
+	 */
 	private void dump(String args) {
-		// TODO Auto-generated method stub
 		if(!args.isEmpty()) {
 			if(args.startsWith("x")){
 				dumpVariable(Integer.parseInt(args.substring(1)));
@@ -182,8 +219,14 @@ public class TransactionManager {
 		}
 	}
 
+	/**
+	 * 
+	 * Method to provide a dump of a variable
+	 * @param variableId
+	 * @return none
+	 * 
+	 */
 	private void dumpVariable(int variable) {
-		// TODO Auto-generated method stub
 		List<Integer> siteList = _variableMap.get(variable);
 		for (Integer site : siteList) {
 			DatabaseManager dm = _databaseManagers.get(site-1);
@@ -193,8 +236,14 @@ public class TransactionManager {
 		}
 	}
 
+	/**
+	 * 
+	 * Method to provide a dump of a site
+	 * @param siteId
+	 * @return none
+	 * 
+	 */	
 	private void dumpSite(int site) {
-		// TODO Auto-generated method stub
 		for(DatabaseManager dm : _databaseManagers){
 			if(dm.getSiteIndex() == site){
 				System.out.println("---------- Site "+dm.getSiteIndex()+" ----------");
@@ -204,14 +253,27 @@ public class TransactionManager {
 		}
 	}
 
+	/**
+	 * 
+	 * Method to recover a site
+	 * @param siteId
+	 * @return none
+	 * 
+	 */	
 	private void recoverSite(int site) {
-		// TODO Auto-generated method stub
 		_databaseManagers.get(site-1).recover();
 		System.out.println("Site "+site+" recovered.");
+		System.out.println();
 	}
-
+	
+	/**
+	 * 
+	 * Method to fail a site
+	 * @param siteId
+	 * @return none
+	 * 
+	 */	
 	private void failSite(int site) {
-		// TODO Auto-generated method stub
 		List<Operation> operation = _databaseManagers.get(site-1).getAllowedOperations();
 		for (Operation op : operation) {
 			abort(op.get_transactionId());
@@ -222,13 +284,21 @@ public class TransactionManager {
 			    }
 			}
 			System.out.println("T"+op.get_transactionId()+" aborted.");
+			System.out.println();
 		}
 		_databaseManagers.get(site-1).fail();
-		System.out.println("Above transactions were aborted as site "+site+" failed");
+		System.out.println("Site "+site+" failed");
+		System.out.println();
 	}
 
+	/**
+	 * 
+	 * Method to abort a transaction
+	 * @param siteId
+	 * @return none
+	 * 
+	 */	
 	private void abort(Integer trans) {
-		// TODO Auto-generated method stub
 		System.out.println("Abort T"+trans);
 		for(DatabaseManager dm : _databaseManagers){
 			dm.abortTransaction(trans);
@@ -243,32 +313,87 @@ public class TransactionManager {
 		_transLockTransMap.remove(trans);
 		checkToReleaseWaitingTransactions();
 	}
-
+	
+	/**
+	 * 
+	 * Method to end a transaction
+	 * @param transId
+	 * @return none
+	 * 
+	 */	
 	private void endTransaction(String args) {
-		// TODO Auto-generated method stub
 		Integer transaction = Integer.parseInt(args.substring(1));
-		if(_abortedTransactions.contains(transaction))
+		if(_abortedTransactions.contains(transaction)) {
+			System.out.println("Transation"+ args +" already aborted");
 			return;
-		Queue<Operation> opQueue = _transOperationMap.get(transaction);
-		for(Operation op : opQueue) {
-			List<Integer> siteList = _operationLockAcquiredSitesMap.get(op);
-			for(Integer site : siteList) {
-				DatabaseManager dm = _databaseManagers.get(site-1);
-				dm.commit(op);
-			}
-			_operationLockAcquiredSitesMap.remove(op);
 		}
-		_transOperationMap.remove(transaction);
-		_transactions.remove(transaction);
-		System.out.println("Transaction T"+transaction+" committed successfully.");
-		checkToReleaseWaitingTransactions();
+		
+		Transaction tTrans = _transactions.get(transaction);
+		if(tTrans.get_type() == edu.nyu.adbms.Transaction.Type.RO) {
+			Queue<Operation> opQueue = _transOperationMap.get(transaction);
+			for(Operation op : opQueue) {
+				List<List<Data>> everySiteDataList = _transSiteDataList.get(transaction);
+				for(List<Data> dataList : everySiteDataList){
+					for(Data data : dataList) {
+						if(op.get_varIndex() == data.get_index()){
+							if(data.get_value() != 0){
+								System.out.println("variable x"+data.get_index()+" from T"+
+										transaction+" has value "+data.get_value());
+							}
+							else {
+								int tmp = 0;
+								List<Integer> siteList = _variableMap.get(op.get_varIndex());
+								for(Integer i : siteList) {
+									DatabaseManager dm = _databaseManagers.get(i-1);
+									List<Data> tempDataList =  dm.get_variableList();
+									for(Data tempData : tempDataList) {
+										if( op.get_varIndex() == tempData.get_index()){
+											System.out.println("variable x"+data.get_index()+" from T"+
+													transaction+" has value "+data.get_value());
+											tmp = 1;
+											break;
+										}
+									}
+									if(tmp == 1)
+										break;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		else {
+			Queue<Operation> opQueue = _transOperationMap.get(transaction);
+			for(Operation op : opQueue) {
+				List<Integer> siteList = _operationLockAcquiredSitesMap.get(op);
+				for(Integer site : siteList) {
+					DatabaseManager dm = _databaseManagers.get(site-1);
+					dm.commit(op);
+				}
+				_operationLockAcquiredSitesMap.remove(op);
+			}
+			_transOperationMap.remove(transaction);
+			_transactions.remove(transaction);
+			System.out.println("Transaction T"+transaction+" committed successfully.");
+			checkToReleaseWaitingTransactions();
+		}
 	}
 
+	/**
+	 * 
+	 * Method which checks where if any operations can be released from waiting list
+	 * @param none
+	 * @return none
+	 * 
+	 */	
 	private void checkToReleaseWaitingTransactions() {
-		// TODO Auto-generated method stub
 		Operation tempOperation;
-		while(_waitingOperations.peek() != null) {
-			tempOperation = _waitingOperations.poll();
+		Queue<Operation> waitingOperations = new LinkedList<Operation>();
+		waitingOperations.addAll(_waitingOperations);
+		while(waitingOperations.peek() != null) {
+			tempOperation = waitingOperations.poll();
+			_waitingOperations.poll();
 			if(tempOperation.get_type() == Type.READ){
 				read(tempOperation);
 			}
@@ -277,10 +402,15 @@ public class TransactionManager {
 			}
 		}
 	}
-
+	
+	/**
+	 * 
+	 * Method to parse only read and write transactions
+	 * @param Read and write operation arguments
+	 * @return none
+	 * 
+	 */
 	private void parseReadWrite(String args) {
-		// TODO Auto-generated method stub
-		System.out.println("Inside parseReadWrite()");
 		String[] transVarData = args.split(",");
 		if(transVarData.length == 2) {
 			Operation op = new Operation(Integer.parseInt(transVarData[0].substring(1)), Operation.Type.READ,
@@ -299,9 +429,14 @@ public class TransactionManager {
 		}
 	}
 
+	/**
+	 * 
+	 * Method to run the write operation
+	 * @param write operation
+	 * @return none
+	 * 
+	 */
 	private void write(Operation op) {
-		// TODO Auto-generated method stub
-		System.out.println("TM() -> Inside write()");
 		boolean result = false;
 		List<Integer> siteList = new ArrayList<Integer>();
 		if(_abortedTransactions.contains(op.get_transactionId()))
@@ -319,13 +454,11 @@ public class TransactionManager {
 		}
 		if(siteList.size() == 0) {
 			_waitingOperations.add(op);
-			System.out.println("TM, write() -> Didnt' get lock. Waiting...");
 			List<Integer> transList = getWhichTransIsNotGivingLock(op);
 			_transLockTransMap.put(op.get_transactionId(), transList);
 			checkforDeadLock();
 		}
 		else {
-			System.out.println("TM, write() -> Got the lock.");
 			Queue<Operation> operationQueue = _transOperationMap.get(op.get_transactionId());
 			if(operationQueue != null) {
 				operationQueue.add(op);
@@ -338,9 +471,15 @@ public class TransactionManager {
 			}
 		}
 	}
-
+	
+	/**
+	 * 
+	 * Method to check for deadlock between waiting transactions using cycle deadlock
+	 * @param none
+	 * @return none
+	 * 
+	 */
 	private void checkforDeadLock() {
-		// TODO Auto-generated method stub
 		Graph<Integer> graph = new Graph<Integer>(true);
 		Iterator<Entry<Integer, List<Integer>>> it = _transLockTransMap.entrySet().iterator();
 		while(it.hasNext()) {
@@ -365,7 +504,14 @@ public class TransactionManager {
 			abort(youngTrans);
 		}
 	}
-
+	
+	/**
+	 * 
+	 * Method to get list of transactions because of which a transaction is not getting lock
+	 * @param operation which has been put to waiting
+	 * @return none
+	 * 
+	 */
 	private List<Integer> getWhichTransIsNotGivingLock(Operation op) {
 		List<Integer> transList = new ArrayList<Integer>();
 		for(DatabaseManager dm : _databaseManagers) {
@@ -381,15 +527,19 @@ public class TransactionManager {
 		return transList;
 	}
 
+	/**
+	 * 
+	 * Method to run the write operation
+	 * @param Read operation
+	 * @return none
+	 * 
+	 */
 	private void read(Operation op) {
-		// TODO Auto-generated method stub
-		System.out.println("TM() -> Inside read()");
 		boolean result = false;
-		Transaction transaction;
 		if(_abortedTransactions.contains(op.get_transactionId()))
 			return;
 		if(_transactions.get(op.get_transactionId()).get_type() == Transaction.Type.RO) {
-			//take snapshot
+			//
 			result = true;
 		}
 		else {
@@ -409,13 +559,11 @@ public class TransactionManager {
 		}
 		if(!result) {
 			_waitingOperations.add(op);
-			System.out.println("TM, read() -> Didnt' get lock. In waiting.");
 			List<Integer> transList = getWhichTransIsNotGivingLock(op);
 			_transLockTransMap.put(op.get_transactionId(), transList);
 			checkforDeadLock();
 		}
 		else {
-			System.out.println("TM, read() -> Got the lock.");
 			Queue<Operation> operationQueue = _transOperationMap.get(op.get_transactionId());
 			if(operationQueue != null) {
 				operationQueue.add(op);
@@ -429,24 +577,24 @@ public class TransactionManager {
 		}
 	}
 
-	private List<Integer> getSiteForVariable(int var) {
-		// TODO Auto-generated method stub
-		return _variableMap.get(var);
-	}
-
+	/**
+	 * 
+	 * Method to parse only read and write transactions
+	 * @param Read and write operation arguments
+	 * @return none
+	 * 
+	 */
 	private void beginTransaction(String type, int transId) {
-		// TODO Auto-generated method stub
 		if(type == "RW"){
 			_transactions.put(transId, new Transaction(transId, _timestamp, Transaction.Type.RW));
 		}
 		else {
+			List<List<Data>> everySiteDataList = new ArrayList<List<Data>>();
 			_transactions.put(transId, new Transaction(transId, _timestamp, Transaction.Type.RO));
+			for(DatabaseManager dm : _databaseManagers) {
+				everySiteDataList.add(dm.siteSnapShot());
+			}
+			_transSiteDataList.put(transId, everySiteDataList);
 		}
 	}
-
-	public void CreateWaitingGraph(int get_transactionId, int transId) {
-		// TODO Auto-generated method stub
-		
-	}
-	
 }
