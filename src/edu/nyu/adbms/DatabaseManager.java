@@ -27,6 +27,7 @@ public class DatabaseManager {
 	private List<Data> _variableList;
 	private Map<Integer, Queue<Operation>> _allowedTransactions;
 	private Map<Integer, List<Lock>> _lockTable;
+	private Map<Integer, List<Integer>> _variableTransLockMap;
 	private TransactionManager _tm;
 	
 	public DatabaseManager(int siteIndex, TransactionManager transactionManager) {
@@ -36,6 +37,7 @@ public class DatabaseManager {
 		_variableList = new CopyOnWriteArrayList<Data>();
 		_allowedTransactions = new HashMap<Integer, Queue<Operation>>();
 		_lockTable = new HashMap<Integer, List<Lock>>();
+		_variableTransLockMap = new HashMap<Integer, List<Integer>>();
 		_tm = transactionManager;
 		init();
 	}
@@ -52,7 +54,6 @@ public class DatabaseManager {
 			}
 		}*/
 		for (int i = 1; i <= 20; i++) {
-			List<Data> dataList = new ArrayList<Data>();
 		    if (i % 2 == 0 || (1 + i % 10) == _siteIndex) {
 		    	_variableList.add(new Data(10 * i, i));
 		    }
@@ -85,6 +86,20 @@ public class DatabaseManager {
 	 */
 	public void set_variableList(List<Data> _variableList) {
 		this._variableList = _variableList;
+	}
+
+	/**
+	 * @return the _variableTransLockMap
+	 */
+	public Map<Integer, List<Integer>> get_variableTransLockMap() {
+		return _variableTransLockMap;
+	}
+
+	/**
+	 * @param _variableTransLockMap the _variableTransLockMap to set
+	 */
+	public void set_variableTransLockMap(Map<Integer, List<Integer>> _variableTransLockMap) {
+		this._variableTransLockMap = _variableTransLockMap;
 	}
 
 	public List<Operation> getAllowedOperations() {
@@ -163,6 +178,7 @@ public class DatabaseManager {
 	public boolean acquireLock(Operation op) {
 		// TODO Auto-generated method stub
 		List<Lock> locksOnVar = _lockTable.get(op.get_varIndex());
+		List<Integer> transList = _variableTransLockMap.get(op.get_varIndex());
 		int setLock = 0;
 		if(op.get_type() == Type.READ) {
 			if(locksOnVar == null) {
@@ -172,6 +188,11 @@ public class DatabaseManager {
 				else
 					newLockList.add(new Lock(op.get_transactionId(), LockType.READ));
 				_lockTable.put(op.get_varIndex(), newLockList);
+				if(transList != null){
+					transList = new ArrayList<Integer>();
+				}
+				transList.add(op.get_transactionId());
+				_variableTransLockMap.put(op.get_varIndex(), transList);
 				addToAllowedTransactions(op);
 				return true;
 			}
@@ -190,6 +211,11 @@ public class DatabaseManager {
 					locksOnVar.add(new Lock(op.get_transactionId(), LockType.READ));
 					_lockTable.put(op.get_varIndex(), locksOnVar);
 					addToAllowedTransactions(op);
+					if(transList != null){
+						transList = new ArrayList<Integer>();
+					}
+					transList.add(op.get_transactionId());
+					_variableTransLockMap.put(op.get_varIndex(), transList);
 					return true;
 				}
 				return false;
@@ -201,6 +227,11 @@ public class DatabaseManager {
 				newLockList.add(new Lock(op.get_transactionId(), LockType.WRITE));
 				_lockTable.put(op.get_varIndex(), newLockList);
 				addToAllowedTransactions(op);
+				if(transList == null){
+					transList = new ArrayList<Integer>();
+				}
+				transList.add(op.get_transactionId());
+				_variableTransLockMap.put(op.get_varIndex(), transList);
 				return true;
 			}
 			return false;

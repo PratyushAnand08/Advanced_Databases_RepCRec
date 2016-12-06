@@ -34,7 +34,7 @@ public class TransactionManager {
 	private Map<Integer, Transaction> _transactions = new HashMap<Integer, Transaction>();
     //map of site index and the list of variables stored in it
 	private Map<Integer, Queue<Operation>> _transOperationMap = new HashMap<Integer, Queue<Operation>>();
-	
+	private Map<Integer, List<Integer>> _transLockTransMap = new HashMap<Integer, List<Integer>>();
 	private Map<Operation, List<Integer>> _operationLockAcquiredSitesMap = new HashMap<Operation, List<Integer>>();
 	private Map<Integer, List<Integer>> _variableMap;
 	//Set of aborted transactions
@@ -229,10 +229,19 @@ public class TransactionManager {
 
 	private void abort(Integer trans) {
 		// TODO Auto-generated method stub
+		System.out.println("Abort T"+trans);
 		for(DatabaseManager dm : _databaseManagers){
 			dm.abortTransaction(trans);
 		}
+		_transLockTransMap.remove(trans);
 		_abortedTransactions.add(trans);
+		Queue<Operation> queue = _transOperationMap.get(trans);
+		for(Operation op : queue) {
+			_waitingOperations.remove(op);
+		}
+		_transOperationMap.remove(trans);
+		_transLockTransMap.remove(trans);
+		checkToReleaseWaitingTransactions();
 	}
 
 	private void endTransaction(String args) {
@@ -310,7 +319,10 @@ public class TransactionManager {
 		}
 		if(siteList.size() == 0) {
 			_waitingOperations.add(op);
-			System.out.println("TM, write() -> Didnt' get lock. In waiting.");
+			System.out.println("TM, write() -> Didnt' get lock. Waiting...");
+			List<Integer> transList = getWhichTransIsNotGivingLock(op);
+			_transLockTransMap.put(op.get_transactionId(), transList);
+			checkforDeadLock();
 		}
 		else {
 			System.out.println("TM, write() -> Got the lock.");
@@ -325,6 +337,48 @@ public class TransactionManager {
 				_transOperationMap.put(op.get_transactionId(), newOperationQueue);
 			}
 		}
+	}
+
+	private void checkforDeadLock() {
+		// TODO Auto-generated method stub
+		Graph<Integer> graph = new Graph<Integer>(true);
+		Iterator<Entry<Integer, List<Integer>>> it = _transLockTransMap.entrySet().iterator();
+		while(it.hasNext()) {
+			Map.Entry<Integer, List<Integer>> pair = (Map.Entry<Integer, List<Integer>>) it.next();
+			if(pair.getValue().size() == 1) {
+				graph.addEdge(pair.getKey(), pair.getValue().get(0));
+			}
+		}
+		boolean isCycle = graph.hasCycle(graph);
+		if(isCycle){
+			System.out.println("Cycle Detected");
+			Integer youngTrans = 0, youngestTimestamp = 0;
+			Iterator<Entry<Integer, List<Integer>>> itr = _transLockTransMap.entrySet().iterator();
+			while(itr.hasNext()) {
+				Map.Entry<Integer, List<Integer>> pair = (Map.Entry<Integer, List<Integer>>) itr.next();
+				Transaction trans = _transactions.get(pair.getKey());
+				if(trans.get_timestamp() > youngestTimestamp){
+					youngestTimestamp = trans.get_timestamp();
+					youngTrans = trans.get_transId();
+				}
+			}
+			abort(youngTrans);
+		}
+	}
+
+	private List<Integer> getWhichTransIsNotGivingLock(Operation op) {
+		List<Integer> transList = new ArrayList<Integer>();
+		for(DatabaseManager dm : _databaseManagers) {
+			Map<Integer,List<Integer>> variableTransMap = dm.get_variableTransLockMap();
+			if(variableTransMap.containsKey(op.get_varIndex())){
+				List<Integer> list = variableTransMap.get(op.get_varIndex());
+				for(Integer i : list) {
+					if(!transList.contains(i))
+						transList.add(i);
+				}
+			}
+		}
+		return transList;
 	}
 
 	private void read(Operation op) {
@@ -356,6 +410,9 @@ public class TransactionManager {
 		if(!result) {
 			_waitingOperations.add(op);
 			System.out.println("TM, read() -> Didnt' get lock. In waiting.");
+			List<Integer> transList = getWhichTransIsNotGivingLock(op);
+			_transLockTransMap.put(op.get_transactionId(), transList);
+			checkforDeadLock();
 		}
 		else {
 			System.out.println("TM, read() -> Got the lock.");
