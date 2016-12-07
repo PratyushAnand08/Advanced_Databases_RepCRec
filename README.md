@@ -40,7 +40,7 @@ Individual functionalities of these components will be:
     •	It works closely with the transaction manager. When a site fails, it takes the list of operations on the site and aborts all the transactions for those operations and keeps a record of it. 
     •	Updates the information regarding transactions and locks.
 
-5.	Cycle Deadlock Detector
+	5.	Cycle Deadlock Detector
 
     •	As soon as the transactions are put in wait status, the transaction and for whom this transaction is waiting for, this both information is sent here which starts creating a graph.
     •	At every iteration, it checks if a cycle is being formed by the waiting transactions. If yes, then youngest transaction is aborted. 
